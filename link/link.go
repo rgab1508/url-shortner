@@ -2,6 +2,7 @@ package link
 
 import (
   "os"
+  //"fmt"
   "log"
   "context"
 
@@ -10,42 +11,67 @@ import (
 
   firebase "firebase.google.com/go"
   "google.golang.org/api/option"
+  "google.golang.org/api/iterator"
 )
 
 type Link struct {
-  Slug string `json:"slug"`
+  ID string `json:"id"`
   Url string  `json:"url"`
+  Timestamp string `json:"timestamp"`
 }
 
-func (l *Link) Save(){
+func (l *Link) Save() error {
   ctx := context.Background()
   sa := option.WithCredentialsFile(os.Getenv("PATH_TO_SERVICE_FILE"))
   conf := &firebase.Config{ProjectID: os.Getenv("PROJECT_ID")}
   app, err := firebase.NewApp(ctx, conf, sa)
   if err != nil {
-    log.Fatalln(err)
+    return err
   }
 
   client, err := app.Firestore(ctx)
   if err != nil {
-    log.Fatalln(err)
+    return err
   }
   defer client.Close()
 
   _, _, err = client.Collection("links").Add(ctx, map[string]interface{}{
-    "slug": l.Slug,
+    "id": l.ID,
     "url":  l.Url,
   })
   if err != nil {
-    log.Fatalf("Failed adding Link : %v", err)
+    return err
   }
+
+  return nil
 }
 
 /* ROUTES */
 
 func GetLink(c *fiber.Ctx){
   id := c.Params("id")
-  c.Send(id)
+
+  ctx := context.Background()
+  sa := option.WithCredentialsFile(os.Getenv("PATH_TO_SERVICE_FILE"))
+  conf := &firebase.Config{ProjectID: os.Getenv("PROJECT_ID")}
+  app, err := firebase.NewApp(ctx, conf, sa)
+  if err != nil {
+    c.Status(500).Send(err)
+  }
+
+  client, err := app.Firestore(ctx)
+  if err != nil {
+    c.Status(500).Send(err)
+  }
+  defer client.Close()
+
+  iter := client.Collection("links").Where("id", "==", id).Documents(ctx)
+  doc, err := iter.Next()
+  if err  == iterator.Done {
+    c.Status(404).Send("Link Does not Exists.")
+    return
+  }
+  c.JSON(doc.Data())
 }
 
 func NewLink(c *fiber.Ctx){
@@ -54,7 +80,12 @@ func NewLink(c *fiber.Ctx){
     c.Status(500).Send(err)
     return
   }
-  link.Slug = utils.RandomSlug(6)
-  link.Save()
+  link.ID = utils.RandomSlug(6)
+  err := link.Save()
+  if err != nil {
+    log.Fatalln(err)
+    c.Status(500).Send("Error Storing Url")
+    return
+  }
   c.JSON(link)
 }
