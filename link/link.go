@@ -2,6 +2,7 @@ package link
 
 import (
   "os"
+  "time"
   //"fmt"
   "log"
   "context"
@@ -17,7 +18,7 @@ import (
 type Link struct {
   ID string `json:"id"`
   Url string  `json:"url"`
-  Timestamp string `json:"timestamp"`
+  Timestamp time.Time `json:"timestamp"`
 }
 
 func (l *Link) Save() error {
@@ -38,6 +39,7 @@ func (l *Link) Save() error {
   _, _, err = client.Collection("links").Add(ctx, map[string]interface{}{
     "id": l.ID,
     "url":  l.Url,
+    "timestamp": l.Timestamp,
   })
   if err != nil {
     return err
@@ -81,6 +83,7 @@ func NewLink(c *fiber.Ctx){
     return
   }
   link.ID = utils.RandomSlug(6)
+  link.Timestamp = time.Now()
   err := link.Save()
   if err != nil {
     log.Fatalln(err)
